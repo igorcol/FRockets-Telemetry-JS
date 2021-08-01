@@ -1,14 +1,11 @@
 const SerialPort = require("serialport");
 const Readline = require("@serialport/parser-readline");
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
-var fs = require('fs')
-const readline = require('readline')
-readline.emitKeypressEvents(process.stdin);
-process.stdin.setRawMode(true);
+var fs = require('fs');
 
-const PORT  = 3
-const BRATE = 9600
-var temp = []
+const ps = require("prompt-sync")
+const prompt = ps()
+
 /*
 Cria csvWriter, header e arquivo
 */
@@ -19,20 +16,36 @@ const dataIndex = (fs.readdirSync(dir).length + 1)
 const csvWriter = createCsvWriter({
     path: `${dir}/amostra${dataIndex}.csv`,
     header: [
-        {id: 'x', title: "X_VALUES"},
-        {id: 'y', title: "Y_VALUES"},
+        {id: 'tempo', title: "TEMPO"},
+        {id: 'altura', title: "ALTURA"},
+        {id: 'lat', title: "LATITUDE"},
+        {id: 'long', title: "LONGITUDE"},
+        {id: 'recovery', title: "RECOVERY"},
     ]
 });
-
-Main()
-
-
 
 
 // MAIN FUNCTION
 function Main() {
-    console.log("Software Iniciado")
-    ReadSerial(PORT, BRATE)
+
+    console.log("\nDigite o NÚMERO da porta de comunicação.")
+    var port = prompt("> ")
+    
+    console.log("\nEscolha o BaudRate. \n1. 115200 \n2. 9600 \nOUTRO: Digite")
+    var brate = prompt("> ")
+    switch(brate) {
+        case '1':
+            brate = 115200
+            break
+        case '2':
+            brate = 9600
+            break
+        default:
+            brate = parseInt(brate)
+    }
+
+    console.log(`Software Iniciado na porta ${port} | BaudRate ${brate}`)
+    ReadSerial(port, brate)
 }
 
 // Lê porta de comunicação
@@ -42,36 +55,50 @@ function ReadSerial(portId, baudRate) {
     port.pipe(parser)
 
     // Main Loop
-    parser.on("data", (data) => { 
+    parser.on("data", (data) => { // tempo;altura;recovery;lat;long
         const splitDataArray = data.split(";") 
         // data = "6.44;1.87"
         // splitDataArray = [ '6.44', '1.87\r' ]
-        const Xdata = String(splitDataArray[0]) // Eixo X gráfico | TEMPO  
-        const Ydata = String(splitDataArray[1]) // Eixo Y gráfico | ALTURA 
+        const TEMPO = parseInt(splitDataArray[0])    // Eixo X gráfico | TEMPO  
+        const ALTURA = parseFloat(splitDataArray[1]) // Eixo Y gráfico | ALTURA 
+        let RECOVERY = 0  
+        let LAT = 0
+        let LONG = 0
 
-        console.log(`${Xdata}  ||  ${Ydata.replace('\r', '')}`)
+        if (splitDataArray > 2) {
+            RECOVERY = String(splitDataArray[2])
+            LAT = String(splitDataArray[3])
+            LONG = String(splitDataArray[4])
+        }
+
+        console.log(
+            `${TEMPO}  -  ${ALTURA} || ${LAT} - ${LONG} || ${RECOVERY}` 
+        )
         
         SaveData([ 
-            {x: Xdata, y: Ydata} 
+            {
+                tempo: TEMPO,
+                altura: ALTURA,
+                lat: LAT ,
+                long: LONG,
+                recovery: RECOVERY 
+            } 
         ])
 
-        // PLOTAR GRAFICO
+        // PLOTAR GRAFICO | Tempo X Altura
 
     });
 }
 
+
 // Exec before exit ( Ctrl + C )
 process.on('SIGINT', () => {
-    console.log("--SIGINT--")
+    console.log("--| SOFTWARE INTERROMPIDO |--")
     process.exit()
 });
-process.on('exit', () => {
-    console.log("--EXIT--")
-    console.log(temp)
-});
 
 
-// Salva dados no CSV 
+// Save data in CSV file
 async function SaveData(data) {
     await csvWriter.writeRecords(data)
 }
@@ -83,3 +110,7 @@ function CheckDir(dir) {
     }
     return true
 }
+
+
+
+Main()
